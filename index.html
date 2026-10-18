@@ -3,9 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>CycleNavi</title>
+  <title>CycleNavi Pro</title>
 
-  <!-- PWA & iOS Safari 設定 -->
   <link rel="manifest" href="manifest.json">
   <meta name="theme-color" content="#121212">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -19,10 +18,11 @@
   <style>
     :root {
       --bg-dark: #121212;
-      --card-bg: rgba(28, 28, 30, 0.92);
+      --card-bg: rgba(28, 28, 30, 0.94);
       --accent: #30d158;
       --accent-warn: #ff453a;
       --accent-blue: #0a84ff;
+      --accent-orange: #ff9f0a;
       --text: #ffffff;
       --text-sub: #8e8e93;
     }
@@ -30,60 +30,117 @@
     body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000; color: var(--text); }
     #map { width: 100%; height: 100%; z-index: 1; }
 
-    /* 上部HUD（ターンバイターン案内） */
-    #hud-panel {
+    /* 上部HUD（ターンバイターン案内 & 検索バー） */
+    #top-bar {
       position: absolute;
       top: 12px;
       left: 12px;
       right: 12px;
       z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    #hud-panel {
       background: var(--card-bg);
       backdrop-filter: blur(16px);
       border-radius: 16px;
-      padding: 14px 16px;
+      padding: 12px 16px;
       display: flex;
       align-items: center;
       gap: 14px;
       box-shadow: 0 8px 32px rgba(0,0,0,0.45);
       border: 1px solid rgba(255,255,255,0.12);
     }
-    #hud-icon {
-      font-size: 36px;
-      min-width: 44px;
-      text-align: center;
-    }
+    #hud-icon { font-size: 34px; min-width: 40px; text-align: center; }
     #hud-info { flex: 1; overflow: hidden; }
-    #hud-distance { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
-    #hud-action { font-size: 14px; color: var(--text-sub); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; margin-top: 3px; }
+    #hud-distance { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+    #hud-action { font-size: 13px; color: var(--text-sub); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; margin-top: 3px; }
     #off-course-badge {
       display: none;
       background: var(--accent-warn);
       color: white;
       font-weight: 800;
-      padding: 4px 10px;
-      border-radius: 20px;
+      padding: 4px 8px;
+      border-radius: 12px;
       font-size: 11px;
       animation: blink 1s infinite;
     }
     @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
+    /* 地点設定・検索バー */
+    #search-box {
+      display: flex;
+      gap: 6px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 6px 10px;
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    #search-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+    }
+    #search-input::placeholder { color: var(--text-sub); }
+    .search-btn {
+      background: var(--accent-blue);
+      border: none;
+      color: #fff;
+      border-radius: 8px;
+      padding: 6px 12px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    /* ルート作成モード・ウェイポイントバー */
+    #waypoint-panel {
+      display: none;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border-radius: 12px;
+      padding: 10px 14px;
+      border: 1px solid rgba(255,255,255,0.12);
+      font-size: 13px;
+    }
+    .wp-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .wp-title { font-weight: 700; color: var(--accent); }
+    .wp-actions { display: flex; gap: 8px; }
+    .wp-btn {
+      background: #3a3a3c;
+      border: none;
+      color: #fff;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+    }
+    .wp-btn.primary { background: var(--accent-blue); font-weight: 700; }
+    #wp-list-text { color: var(--text-sub); font-size: 12px; }
+
     /* 勾配凡例 (右上) */
     #grade-legend {
       position: absolute;
-      top: 92px;
+      top: 145px;
       right: 12px;
       z-index: 999;
       background: var(--card-bg);
       backdrop-filter: blur(12px);
       border: 1px solid rgba(255,255,255,0.12);
       border-radius: 10px;
-      padding: 8px 10px;
-      font-size: 11px;
+      padding: 6px 8px;
+      font-size: 10px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.4);
     }
-    .legend-title { font-weight: 700; margin-bottom: 4px; color: var(--text-sub); }
-    .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: #fff; font-family: monospace; }
-    .legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+    .legend-title { font-weight: 700; margin-bottom: 3px; color: var(--text-sub); }
+    .legend-item { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; color: #fff; font-family: monospace; }
+    .legend-color { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
 
     /* 下部ダッシュボード */
     #bottom-panel {
@@ -117,18 +174,18 @@
       border-radius: 14px;
       padding: 8px;
       border: 1px solid rgba(255,255,255,0.12);
-      height: 70px;
+      height: 65px;
     }
     #elevationCanvas { width: 100%; height: 100%; display: block; }
 
     /* 操作バー */
-    .controls-bar { display: flex; gap: 8px; }
+    .controls-bar { display: flex; gap: 6px; }
     .btn {
       flex: 1;
-      height: 48px;
+      height: 46px;
       border: none;
       border-radius: 12px;
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
       display: flex;
       align-items: center;
@@ -137,23 +194,56 @@
       color: #fff;
       box-shadow: 0 4px 14px rgba(0,0,0,0.3);
     }
-    .btn-file { background: #3a3a3c; }
+    .btn-mode { background: #3a3a3c; }
+    .btn-mode.active { background: var(--accent-orange); color: #000; }
+    .btn-file { background: #2c2c2e; }
     .btn-start { background: var(--accent); }
     .btn-start.running { background: var(--accent-warn); }
-    .btn-recenter { width: 48px; flex: none; background: #2c2c2e; font-size: 20px; }
+    .btn-icon { width: 46px; flex: none; background: #2c2c2e; font-size: 18px; }
     input[type="file"] { display: none; }
+
+    /* Leaflet レイヤーコントロールのダークカスタマイズ */
+    .leaflet-control-layers {
+      background: var(--card-bg) !important;
+      color: #fff !important;
+      border-radius: 12px !important;
+      border: 1px solid rgba(255,255,255,0.15) !important;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4) !important;
+      font-size: 12px !important;
+    }
+    .leaflet-control-layers-expanded { padding: 10px 14px !important; }
   </style>
 </head>
 <body>
 
-  <!-- 上部案内HUD -->
-  <div id="hud-panel">
-    <div id="hud-icon">🚲</div>
-    <div id="hud-info">
-      <div id="hud-distance">GPX待機中</div>
-      <div id="hud-action">GPXファイルを選択してください</div>
+  <div id="top-bar">
+    <!-- 上部案内HUD -->
+    <div id="hud-panel">
+      <div id="hud-icon">🚲</div>
+      <div id="hud-info">
+        <div id="hud-distance">ルート未設定</div>
+        <div id="hud-action">「ルート作成」または「GPX」から開始</div>
+      </div>
+      <div id="off-course-badge">OFF COURSE</div>
     </div>
-    <div id="off-course-badge">OFF COURSE</div>
+
+    <!-- 地名・施設検索バー -->
+    <div id="search-box">
+      <input type="text" id="search-input" placeholder="地名・駅名・山名で検索...">
+      <button class="search-btn" id="search-btn">検索</button>
+    </div>
+
+    <!-- 地点指定モード用情報バー -->
+    <div id="waypoint-panel">
+      <div class="wp-header">
+        <span class="wp-title" id="wp-instruction">地図をタップして【出発地】を指定</span>
+        <div class="wp-actions">
+          <button class="wp-btn" id="wp-reset-btn">クリア</button>
+          <button class="wp-btn primary" id="wp-route-btn">ルート探索</button>
+        </div>
+      </div>
+      <div id="wp-list-text">地点: 未設定</div>
+    </div>
   </div>
 
   <!-- 勾配凡例 -->
@@ -183,47 +273,79 @@
     </div>
 
     <div class="controls-bar">
-      <label class="btn btn-file" for="gpxFileInput">GPX選択</label>
+      <button class="btn btn-mode" id="routeModeBtn">📍 地点設定</button>
+      <label class="btn btn-file" for="gpxFileInput">GPX</label>
       <input type="file" id="gpxFileInput" accept=".gpx">
       <button class="btn btn-start" id="startBtn">ナビ開始</button>
-      <button class="btn btn-recenter" id="recenterBtn">🎯</button>
+      <button class="btn btn-icon" id="exportBtn" title="GPX出力">💾</button>
+      <button class="btn btn-icon" id="recenterBtn" title="現在地">🎯</button>
     </div>
   </div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
     // --- 状態変数 ---
     let routePoints = [];       // {lat, lng, ele, distFromStart}
-    let turnPoints = [];        // 案内対象の交差点
-    let totalDistance = 0;      // ルート全長(m)
+    let turnPoints = [];        // 案内地点
+    let waypoints = [];         // 設定された地点 [{lat, lng, type: 'start'|'via'|'goal'}]
+    let waypointMarkers = [];
+    let isSettingPoints = false;
+    let totalDistance = 0;
     let isNavigating = false;
     let userMarker = null;
     let wakeLock = null;
     let watchId = null;
     let silentAudio = null;
-    let lastSpokenTurnIdx = -1;
 
-    // --- Leaflet初期化（国土地理院 淡色地図） ---
-    const map = L.map('map', { zoomControl: false }).setView([35.6812, 139.7671], 13);
-    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
-      maxZoom: 18,
-      attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
-    }).addTo(map);
+    // --- 地図レイヤーの準備（国土地理院＆OSM） ---
+    const layerPale = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      maxZoom: 18, attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院(淡色)</a>'
+    });
+    const layerStd = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+      maxZoom: 18, attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院(標準)</a>'
+    });
+    const layerPhoto = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/seamlessphoto/{z}/{x}/{y}.jpg', {
+      maxZoom: 18, attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院(写真)</a>'
+    });
+    const layerRelief = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/relief/{z}/{x}/{y}.png', {
+      opacity: 0.7, maxZoom: 15, attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院(起伏)</a>'
+    });
+    const layerOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19, attribution: '© OpenStreetMap contributors'
+    });
 
+    const baseMaps = {
+      "地理院 淡色地図": layerPale,
+      "地理院 標準地図": layerStd,
+      "地理院 航空写真": layerPhoto,
+      "OpenStreetMap": layerOSM
+    };
+    const overlayMaps = {
+      "地形陰影起伏図": layerRelief
+    };
+
+    const map = L.map('map', {
+      center: [35.6812, 139.7671],
+      zoom: 14,
+      layers: [layerPale],
+      zoomControl: false
+    });
+
+    L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
     const gradientLayerGroup = L.layerGroup().addTo(map);
+    const wpLayerGroup = L.layerGroup().addTo(map);
 
     // --- 勾配判定カラー ---
     function getGradeColor(grade) {
-      if (grade < 0) return '#0a84ff';    // 下り
-      if (grade < 3) return '#30d158';    // 平坦
-      if (grade < 6) return '#ffd60a';    // 緩勾配
-      if (grade < 10) return '#ff9f0a';   // 坂
-      if (grade < 15) return '#ff453a';   // 激坂
-      return '#bf5af2';                   // 極悪坂
+      if (grade < 0) return '#0a84ff';
+      if (grade < 3) return '#30d158';
+      if (grade < 6) return '#ffd60a';
+      if (grade < 10) return '#ff9f0a';
+      if (grade < 15) return '#ff453a';
+      return '#bf5af2';
     }
 
-    // --- 音声案内エンジン ---
+    // --- 音声案内 ---
     function speak(text) {
       if ('speechSynthesis' in window) {
         window.speechSynthesis.cancel();
@@ -246,15 +368,13 @@
       if ('mediaSession' in navigator) {
         navigator.mediaSession.metadata = new MediaMetadata({
           title: "自転車ナビ案内中",
-          artist: "CycleNavi",
-          album: "GPS Tracking"
+          artist: "CycleNavi Pro",
+          album: "GPS Route"
         });
-        navigator.mediaSession.setActionHandler('play', () => silentAudio.play());
-        navigator.mediaSession.setActionHandler('pause', () => silentAudio.play());
       }
     }
 
-    // --- 距離 & 方位角計算 ---
+    // --- 測地計算 ---
     function getDistance(p1, p2) {
       const R = 6371000;
       const dLat = (p2.lat - p1.lat) * Math.PI / 180;
@@ -270,7 +390,197 @@
       return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
     }
 
-    // --- GPXファイルの解析 ---
+    // --- 地名検索（国土地理院API） ---
+    document.getElementById('search-btn').addEventListener('click', searchLocation);
+    document.getElementById('search-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') searchLocation();
+    });
+
+    async function searchLocation() {
+      const query = document.getElementById('search-input').value.trim();
+      if (!query) return;
+
+      try {
+        const res = await fetch(`https://msearch.gsi.go.jp/msearch/msearch.php?key=${encodeURIComponent(query)}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          const [lng, lat] = data[0].geometry.coordinates;
+          map.setView([lat, lng], 15);
+          if (isSettingPoints) {
+            addWaypoint({ lat, lng });
+          } else {
+            L.popup().setLatLng([lat, lng]).setContent(`<b>${data[0].properties.title}</b>`).openOn(map);
+          }
+        } else {
+          alert('該当する場所が見つかりませんでした');
+        }
+      } catch (err) {
+        console.error('Search error:', err);
+      }
+    }
+
+    // --- 出発地・中継地・目的地の設定モード ---
+    const routeModeBtn = document.getElementById('routeModeBtn');
+    const waypointPanel = document.getElementById('waypoint-panel');
+    const wpInstruction = document.getElementById('wp-instruction');
+    const wpListText = document.getElementById('wp-list-text');
+
+    routeModeBtn.addEventListener('click', () => {
+      isSettingPoints = !isSettingPoints;
+      if (isSettingPoints) {
+        routeModeBtn.classList.add('active');
+        routeModeBtn.textContent = '完了';
+        waypointPanel.style.display = 'block';
+        updateWaypointUI();
+      } else {
+        routeModeBtn.classList.remove('active');
+        routeModeBtn.textContent = '📍 地点設定';
+        waypointPanel.style.display = 'none';
+      }
+    });
+
+    map.on('click', (e) => {
+      if (!isSettingPoints) return;
+      addWaypoint(e.latlng);
+    });
+
+    function addWaypoint(latlng) {
+      let type = 'via';
+      if (waypoints.length === 0) type = 'start';
+      waypoints.push({ lat: latlng.lat, lng: latlng.lng, type });
+      updateWaypointMarkers();
+      updateWaypointUI();
+    }
+
+    function updateWaypointMarkers() {
+      wpLayerGroup.clearLayers();
+      waypoints.forEach((wp, idx) => {
+        let label = (idx === 0) ? '出' : (idx === waypoints.length - 1 && waypoints.length > 1) ? '着' : `${idx}`;
+        let color = (idx === 0) ? '#30d158' : (idx === waypoints.length - 1 && waypoints.length > 1) ? '#ff453a' : '#0a84ff';
+
+        const customIcon = L.divIcon({
+          className: 'custom-wp-icon',
+          html: `<div style="background:${color};color:#fff;width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;box-shadow:0 2px 6px rgba(0,0,0,0.4);border:2px solid #fff;">${label}</div>`,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        L.marker([wp.lat, wp.lng], { icon: customIcon }).addTo(wpLayerGroup);
+      });
+    }
+
+    function updateWaypointUI() {
+      if (waypoints.length === 0) {
+        wpInstruction.textContent = '地図をタップして【出発地】を指定';
+        wpListText.textContent = '地点: なし';
+      } else if (waypoints.length === 1) {
+        wpInstruction.textContent = '地図をタップして【目的地】または【中継地】を指定';
+        wpListText.textContent = '出発地設定済 (1地点)';
+      } else {
+        wpInstruction.textContent = '中継地を追加、または「ルート探索」を実行';
+        wpListText.textContent = `出発 + 中継/目的 計 ${waypoints.length} 地点`;
+      }
+    }
+
+    document.getElementById('wp-reset-btn').addEventListener('click', () => {
+      waypoints = [];
+      updateWaypointMarkers();
+      updateWaypointUI();
+      gradientLayerGroup.clearLayers();
+      routePoints = [];
+      totalDistance = 0;
+      drawElevationProfile(0);
+      document.getElementById('hud-distance').textContent = "リセット完了";
+      document.getElementById('hud-action').textContent = "地点を指定してください";
+    });
+
+    // --- OSRM 自転車ルーティング実行 ---
+    document.getElementById('wp-route-btn').addEventListener('click', async () => {
+      if (waypoints.length < 2) {
+        alert('出発地と目的地の最低2地点を設定してください');
+        return;
+      }
+
+      document.getElementById('hud-distance').textContent = "計算中...";
+      document.getElementById('hud-action').textContent = "自転車最適ルートを探索しています";
+
+      // OSRM coordinates: lon,lat;lon,lat...
+      const coordString = waypoints.map(w => `${w.lng},${w.lat}`).join(';');
+      const url = `https://routing.openstreetmap.de/routed-bike/route/v1/driving/${coordString}?overview=full&geometries=geojson&steps=true`;
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+        if (data.code !== 'Ok' || !data.routes || data.routes.length === 0) {
+          alert('ルートが見つかりませんでした');
+          return;
+        }
+
+        const coords = data.routes[0].geometry.coordinates;
+        await buildRouteFromCoordinates(coords);
+
+        // 設定モード終了
+        isSettingPoints = false;
+        routeModeBtn.classList.remove('active');
+        routeModeBtn.textContent = '📍 地点設定';
+        waypointPanel.style.display = 'none';
+
+      } catch (err) {
+        console.error('Route error:', err);
+        alert('ルート探索に失敗しました');
+      }
+    });
+
+    // --- 座標リストからルート・標高・ターンを構築 ---
+    async function buildRouteFromCoordinates(coords) {
+      routePoints = [];
+      let cumDist = 0;
+
+      // 標高の取得（国土地理院DEMまたは簡易シミュレーション）
+      for (let i = 0; i < coords.length; i++) {
+        const pt = {
+          lat: coords[i][1],
+          lng: coords[i][0],
+          ele: 0,
+          distFromStart: 0
+        };
+        if (i > 0) cumDist += getDistance(routePoints[i-1], pt);
+        pt.distFromStart = cumDist;
+        routePoints.push(pt);
+      }
+      totalDistance = cumDist;
+
+      // 国土地理院標高APIをサンプリング補正（過多なAPIリクエスト防止のため間引いて取得）
+      await sampleElevations(routePoints);
+
+      renderGradientRoute(routePoints);
+      extractTurnPoints();
+      drawElevationProfile(0);
+
+      document.getElementById('hud-distance').textContent = "探索完了";
+      document.getElementById('hud-action').textContent = `総距離: ${(totalDistance/1000).toFixed(1)}km - 「ナビ開始」を押してください`;
+    }
+
+    // 国土地理院DEMでの標高補完
+    async function sampleElevations(points) {
+      const step = Math.max(1, Math.floor(points.length / 25)); // 最大25点サンプリング
+      for (let i = 0; i < points.length; i += step) {
+        try {
+          const res = await fetch(`https://cyberjapandata2.gsi.go.jp/general/dem/scripts/getelevation.php?lon=${points[i].lng}&lat=${points[i].lat}&outtype=JSON`);
+          const d = await res.json();
+          if (d && d.elevation) points[i].ele = d.elevation;
+        } catch(e){}
+      }
+      // 線形補間
+      for (let i = 0; i < points.length; i++) {
+        if (points[i].ele === 0) {
+          let prev = points[Math.max(0, i - 1)].ele;
+          points[i].ele = prev || 10;
+        }
+      }
+    }
+
+    // --- GPXファイル解析（既存機能） ---
     document.getElementById('gpxFileInput').addEventListener('change', (e) => {
       const file = e.target.files[0];
       if (!file) return;
@@ -294,28 +604,21 @@
           ele: parseFloat(trkpts[i].querySelector('ele')?.textContent || 0),
           distFromStart: 0
         };
-        if (i > 0) {
-          cumDist += getDistance(routePoints[i-1], pt);
-        }
+        if (i > 0) cumDist += getDistance(routePoints[i-1], pt);
         pt.distFromStart = cumDist;
         routePoints.push(pt);
       }
       totalDistance = cumDist;
 
-      // 勾配ヒートマップライン描画
       renderGradientRoute(routePoints);
-
-      // 交差点（ターンポイント）抽出
       extractTurnPoints();
-
-      // 標高グラフ描画
       drawElevationProfile(0);
 
-      document.getElementById('hud-distance').textContent = "ルート読込完了";
-      document.getElementById('hud-action').textContent = `距離: ${(totalDistance/1000).toFixed(1)}km - 「ナビ開始」を押してください`;
+      document.getElementById('hud-distance').textContent = "GPX読込完了";
+      document.getElementById('hud-action').textContent = `総距離: ${(totalDistance/1000).toFixed(1)}km - 「ナビ開始」を押してください`;
     }
 
-    // --- 勾配ヒートマップ描画（スムージング処理付き） ---
+    // --- 勾配ヒートマップ描画 ---
     function renderGradientRoute(points) {
       gradientLayerGroup.clearLayers();
       if (points.length < 2) return;
@@ -345,23 +648,8 @@
       if (currentSegment.latlngs.length > 0) segments.push(currentSegment);
 
       segments.forEach(seg => {
-        // 下敷き（黒アウトライン）
-        L.polyline(seg.latlngs, {
-          color: '#1c1c1e',
-          weight: 8,
-          opacity: 0.6,
-          lineCap: 'round',
-          lineJoin: 'round'
-        }).addTo(gradientLayerGroup);
-
-        // 勾配カラーライン
-        L.polyline(seg.latlngs, {
-          color: seg.color,
-          weight: 5,
-          opacity: 0.95,
-          lineCap: 'round',
-          lineJoin: 'round'
-        }).addTo(gradientLayerGroup);
+        L.polyline(seg.latlngs, { color: '#1c1c1e', weight: 8, opacity: 0.6, lineCap: 'round', lineJoin: 'round' }).addTo(gradientLayerGroup);
+        L.polyline(seg.latlngs, { color: seg.color, weight: 5, opacity: 0.95, lineCap: 'round', lineJoin: 'round' }).addTo(gradientLayerGroup);
       });
 
       const allCoords = points.map(p => [p.lat, p.lng]);
@@ -399,7 +687,7 @@
       }
     }
 
-    // --- 標高プロファイルCanvas描画（勾配色連動） ---
+    // --- 標高プロファイルCanvas描画 ---
     function drawElevationProfile(currentProgressDist) {
       const canvas = document.getElementById('elevationCanvas');
       const ctx = canvas.getContext('2d');
@@ -420,7 +708,6 @@
 
       ctx.clearRect(0, 0, w, h);
 
-      // 勾配に応じたライン描画
       for (let i = 0; i < routePoints.length - 1; i++) {
         const p1 = routePoints[i];
         const p2 = routePoints[i + 1];
@@ -440,13 +727,33 @@
         ctx.stroke();
       }
 
-      // 現在位置インジケーター
       if (currentProgressDist > 0) {
         const curX = (currentProgressDist / totalDistance) * w;
         ctx.fillStyle = '#ff3b30';
         ctx.fillRect(curX - 1.5, 0, 3, h);
       }
     }
+
+    // --- GPX出力機能 ---
+    document.getElementById('exportBtn').addEventListener('click', () => {
+      if (routePoints.length < 2) {
+        alert('出力可能なルートがありません');
+        return;
+      }
+      let gpx = `<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="CycleNaviPro">\n<trk><name>CycleNavi Route</name><trkseg>\n`;
+      routePoints.forEach(p => {
+        gpx += `  <trkpt lat="${p.lat}" lon="${p.lng}"><ele>${p.ele.toFixed(1)}</ele></trkpt>\n`;
+      });
+      gpx += `</trkseg></trk>\n</gpx>`;
+
+      const blob = new Blob([gpx], { type: 'application/gpx+xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `route_${new Date().toISOString().slice(0,10)}.gpx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
 
     // --- ナビゲーションの開始 / 停止 ---
     const startBtn = document.getElementById('startBtn');
@@ -462,7 +769,7 @@
       }
 
       if (routePoints.length === 0) {
-        alert('GPXファイルを読み込んでください');
+        alert('ルートを作成するかGPXを読み込んでください');
         return;
       }
 
@@ -470,20 +777,14 @@
       startBtn.textContent = 'ナビ終了';
       startBtn.classList.add('running');
 
-      // 1. スリープ防止
       if ('wakeLock' in navigator) {
         try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
       }
 
-      // 2. iOSバックグラウンドオーディオ起動
       activateBackgroundAudio();
-
       speak("ナビゲーションを開始します。安全運転を心がけてください。");
 
-      // 3. GPS追跡開始
-      watchId = navigator.geolocation.watchPosition(handleLocationUpdate, (err) => {
-        console.warn('GPS Error:', err);
-      }, {
+      watchId = navigator.geolocation.watchPosition(handleLocationUpdate, (err) => console.warn(err), {
         enableHighAccuracy: true,
         maximumAge: 1000,
         timeout: 10000
@@ -512,11 +813,9 @@
       }
       map.panTo([cur.lat, cur.lng], { animate: true });
 
-      // 速度更新
       const kmh = Math.max(0, cur.speed * 3.6);
       document.getElementById('val-speed').textContent = kmh.toFixed(1);
 
-      // 最寄りルート点の探索
       let minDist = Infinity;
       let closestIdx = 0;
       for (let i = 0; i < routePoints.length; i++) {
@@ -530,21 +829,17 @@
       const closestPoint = routePoints[closestIdx];
       document.getElementById('val-ele').textContent = Math.round(closestPoint.ele);
 
-      // 現在地の勾配（前方100mとの比較）
       const aheadIdx = Math.min(routePoints.length - 1, closestIdx + 10);
       const runDist = routePoints[aheadIdx].distFromStart - closestPoint.distFromStart;
       const riseEle = routePoints[aheadIdx].ele - closestPoint.ele;
       const grade = runDist > 10 ? (riseEle / runDist) * 100 : 0;
       document.getElementById('val-grade').textContent = grade.toFixed(1);
 
-      // 残り距離
       const remain = Math.max(0, (totalDistance - closestPoint.distFromStart) / 1000);
       document.getElementById('val-remain').textContent = remain.toFixed(1);
 
-      // 標高グラフの進捗更新
       drawElevationProfile(closestPoint.distFromStart);
 
-      // オフコース判定（40m以上乖離）
       const badge = document.getElementById('off-course-badge');
       if (minDist > 40) {
         badge.style.display = 'block';
@@ -557,11 +852,9 @@
         isOffCourse = false;
       }
 
-      // 音声案内判定
       checkTurnGuidance(cur, closestPoint.distFromStart);
     }
 
-    // --- 次のターンポイントの音声判定 ---
     function checkTurnGuidance(cur, currentDistFromStart) {
       const nextTurn = turnPoints.find(t => t.point.distFromStart > currentDistFromStart - 20);
 
@@ -587,24 +880,13 @@
       }
     }
 
-    // 再センタリング
     document.getElementById('recenterBtn').addEventListener('click', () => {
       if (userMarker) map.setView(userMarker.getLatLng(), 16);
     });
 
-    // 画面復帰時の再同期
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible' && userMarker) {
-        map.panTo(userMarker.getLatLng());
-      }
-    });
-
-    // --- Service Worker 登録 ---
     if ('serviceWorker' in navigator) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-          .then((reg) => console.log('SW registered:', reg.scope))
-          .catch((err) => console.error('SW registration failed:', err));
+        navigator.serviceWorker.register('./sw.js').catch(console.error);
       });
     }
   </script>
