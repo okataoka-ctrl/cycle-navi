@@ -1,5 +1,5 @@
-const CACHE_NAME_APP = 'cyclenavi-app-v2';
-const CACHE_NAME_TILES = 'cyclenavi-gsi-tiles-v1';
+const CACHE_NAME_APP = 'cyclenavi-app-v3';
+const CACHE_NAME_TILES = 'cyclenavi-tiles-v2';
 
 const STATIC_ASSETS = [
   './',
@@ -9,16 +9,12 @@ const STATIC_ASSETS = [
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
-// 静的ファイルの事前キャッシュ
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME_APP).then((cache) => {
-      return cache.addAll(STATIC_ASSETS);
-    }).then(() => self.skipWaiting())
+    caches.open(CACHE_NAME_APP).then((cache) => cache.addAll(STATIC_ASSETS)).then(() => self.skipWaiting())
   );
 });
 
-// 古いキャッシュのクリーンアップ
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -33,12 +29,11 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// キャッシュ戦略
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
-  // 1. 国土地理院タイル（Cache First: 圏外でも閲覧可能にする）
-  if (url.hostname === 'cyberjapandata.gsi.go.jp') {
+  // 国土地理院タイル / OSMタイルのキャッシュ
+  if (url.hostname.includes('cyberjapandata.gsi.go.jp') || url.hostname.includes('tile.openstreetmap.org')) {
     event.respondWith(
       caches.open(CACHE_NAME_TILES).then(async (cache) => {
         const cached = await cache.match(event.request);
@@ -51,7 +46,6 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         } catch (err) {
-          // オフライン時のフォールバック（透明ピクセル等）
           return new Response('', { status: 408 });
         }
       })
@@ -59,10 +53,8 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // 2. その他のアセット
+  // 静的アセット
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      return cached || fetch(event.request);
-    })
+    caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
