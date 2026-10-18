@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CycleNavi</title>
+
+  <!-- PWA & iOS Safari 設定 -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#121212">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="CycleNavi">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    :root {
+      --bg-dark: #121212;
+      --card-bg: rgba(28, 28, 30, 0.92);
+      --accent: #30d158;
+      --accent-warn: #ff453a;
+      --accent-blue: #0a84ff;
+      --text: #ffffff;
+      --text-sub: #8e8e93;
+    }
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body, html { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #000; color: var(--text); }
+    #map { width: 100%; height: 100%; z-index: 1; }
+
+    /* 上部HUD（ターンバイターン案内） */
+    #hud-panel {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border-radius: 16px;
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.45);
+      border: 1px solid rgba(255,255,255,0.12);
+    }
+    #hud-icon {
+      font-size: 36px;
+      min-width: 44px;
+      text-align: center;
+    }
+    #hud-info { flex: 1; overflow: hidden; }
+    #hud-distance { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.1; }
+    #hud-action { font-size: 14px; color: var(--text-sub); white-space: nowrap; text-overflow: ellipsis; overflow: hidden; margin-top: 3px; }
+    #off-course-badge {
+      display: none;
+      background: var(--accent-warn);
+      color: white;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 11px;
+      animation: blink 1s infinite;
+    }
+    @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    /* 勾配凡例 (右上) */
+    #grade-legend {
+      position: absolute;
+      top: 92px;
+      right: 12px;
+      z-index: 999;
+      background: var(--card-bg);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-size: 11px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+    .legend-title { font-weight: 700; margin-bottom: 4px; color: var(--text-sub); }
+    .legend-item { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; color: #fff; font-family: monospace; }
+    .legend-color { width: 10px; height: 10px; border-radius: 2px; display: inline-block; }
+
+    /* 下部ダッシュボード */
+    #bottom-panel {
+      position: absolute;
+      bottom: 20px;
+      left: 12px;
+      right: 12px;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .metrics-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border-radius: 14px;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.12);
+      text-align: center;
+    }
+    .metric-item .val { font-size: 18px; font-weight: 800; color: #fff; }
+    .metric-item .lbl { font-size: 11px; color: var(--text-sub); }
+
+    /* 標高プロファイルCanvas */
+    #elevation-container {
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      border-radius: 14px;
+      padding: 8px;
+      border: 1px solid rgba(255,255,255,0.12);
+      height: 70px;
+    }
+    #elevationCanvas { width: 100%; height: 100%; display: block; }
+
+    /* 操作バー */
+    .controls-bar { display: flex; gap: 8px; }
+    .btn {
+      flex: 1;
+      height: 48px;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      color: #fff;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+    }
+    .btn-file { background: #3a3a3c; }
+    .btn-start { background: var(--accent); }
+    .btn-start.running { background: var(--accent-warn); }
+    .btn-recenter { width: 48px; flex: none; background: #2c2c2e; font-size: 20px; }
+    input[type="file"] { display: none; }
+  </style>
+</head>
+<body>
+
+  <!-- 上部案内HUD -->
+  <div id="hud-panel">
+    <div id="hud-icon">🚲</div>
+    <div id="hud-info">
+      <div id="hud-distance">GPX待機中</div>
+      <div id="hud-action">GPXファイルを選択してください</div>
+    </div>
+    <div id="off-course-badge">OFF COURSE</div>
+  </div>
+
+  <!-- 勾配凡例 -->
+  <div id="grade-legend">
+    <div class="legend-title">勾配</div>
+    <div class="legend-item"><span class="legend-color" style="background: #0a84ff;"></span> &lt;0% 下り</div>
+    <div class="legend-item"><span class="legend-color" style="background: #30d158;"></span> 0-3% 平坦</div>
+    <div class="legend-item"><span class="legend-color" style="background: #ffd60a;"></span> 3-6% 緩斜</div>
+    <div class="legend-item"><span class="legend-color" style="background: #ff9f0a;"></span> 6-10% 坂</div>
+    <div class="legend-item"><span class="legend-color" style="background: #ff453a;"></span> 10-15% 激坂</div>
+    <div class="legend-item"><span class="legend-color" style="background: #bf5af2;"></span> &gt;15% 壁</div>
+  </div>
+
+  <div id="map"></div>
+
+  <!-- 下部HUD -->
+  <div id="bottom-panel">
+    <div id="elevation-container">
+      <canvas id="elevationCanvas"></canvas>
+    </div>
+
+    <div class="metrics-bar">
+      <div class="metric-item"><div class="val" id="val-speed">0.0</div><div class="lbl">km/h</div></div>
+      <div class="metric-item"><div class="val" id="val-ele">--</div><div class="lbl">標高(m)</div></div>
+      <div class="metric-item"><div class="val" id="val-grade">0.0</div><div class="lbl">勾配(%)</div></div>
+      <div class="metric-item"><div class="val" id="val-remain">--</div><div class="lbl">残り(km)</div></div>
+    </div>
+
+    <div class="controls-bar">
+      <label class="btn btn-file" for="gpxFileInput">GPX選択</label>
+      <input type="file" id="gpxFileInput" accept=".gpx">
+      <button class="btn btn-start" id="startBtn">ナビ開始</button>
+      <button class="btn btn-recenter" id="recenterBtn">🎯</button>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    // --- 状態変数 ---
+    let routePoints = [];       // {lat, lng, ele, distFromStart}
+    let turnPoints = [];        // 案内対象の交差点
+    let totalDistance = 0;      // ルート全長(m)
+    let isNavigating = false;
+    let userMarker = null;
+    let wakeLock = null;
+    let watchId = null;
+    let silentAudio = null;
+    let lastSpokenTurnIdx = -1;
+
+    // --- Leaflet初期化（国土地理院 淡色地図） ---
+    const map = L.map('map', { zoomControl: false }).setView([35.6812, 139.7671], 13);
+    L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', {
+      maxZoom: 18,
+      attribution: '© <a href="https://maps.gsi.go.jp/development/ichiran.html">国土地理院</a>'
+    }).addTo(map);
+
+    const gradientLayerGroup = L.layerGroup().addTo(map);
+
+    // --- 勾配判定カラー ---
+    function getGradeColor(grade) {
+      if (grade < 0) return '#0a84ff';    // 下り
+      if (grade < 3) return '#30d158';    // 平坦
+      if (grade < 6) return '#ffd60a';    // 緩勾配
+      if (grade < 10) return '#ff9f0a';   // 坂
+      if (grade < 15) return '#ff453a';   // 激坂
+      return '#bf5af2';                   // 極悪坂
+    }
+
+    // --- 音声案内エンジン ---
+    function speak(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        uttr.rate = 1.15;
+        window.speechSynthesis.speak(uttr);
+      }
+    }
+
+    // --- iOS Safari バックグラウンド維持オーディオ ---
+    function activateBackgroundAudio() {
+      if (!silentAudio) {
+        const silentWav = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==";
+        silentAudio = new Audio(silentWav);
+        silentAudio.loop = true;
+      }
+      silentAudio.play().catch(console.warn);
+
+      if ('mediaSession' in navigator) {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: "自転車ナビ案内中",
+          artist: "CycleNavi",
+          album: "GPS Tracking"
+        });
+        navigator.mediaSession.setActionHandler('play', () => silentAudio.play());
+        navigator.mediaSession.setActionHandler('pause', () => silentAudio.play());
+      }
+    }
+
+    // --- 距離 & 方位角計算 ---
+    function getDistance(p1, p2) {
+      const R = 6371000;
+      const dLat = (p2.lat - p1.lat) * Math.PI / 180;
+      const dLng = (p2.lng - p1.lng) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    }
+
+    function calculateBearing(p1, p2) {
+      const y = Math.sin((p2.lng - p1.lng) * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180);
+      const x = Math.cos(p1.lat * Math.PI / 180) * Math.sin(p2.lat * Math.PI / 180) -
+                Math.sin(p1.lat * Math.PI / 180) * Math.cos(p2.lat * Math.PI / 180) * Math.cos((p2.lng - p1.lng) * Math.PI / 180);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
+    // --- GPXファイルの解析 ---
+    document.getElementById('gpxFileInput').addEventListener('change', (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => parseGPX(event.target.result);
+      reader.readAsText(file);
+    });
+
+    function parseGPX(xmlText) {
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, 'text/xml');
+      const trkpts = xml.querySelectorAll('trkpt');
+
+      routePoints = [];
+      let cumDist = 0;
+
+      for (let i = 0; i < trkpts.length; i++) {
+        const pt = {
+          lat: parseFloat(trkpts[i].getAttribute('lat')),
+          lng: parseFloat(trkpts[i].getAttribute('lon')),
+          ele: parseFloat(trkpts[i].querySelector('ele')?.textContent || 0),
+          distFromStart: 0
+        };
+        if (i > 0) {
+          cumDist += getDistance(routePoints[i-1], pt);
+        }
+        pt.distFromStart = cumDist;
+        routePoints.push(pt);
+      }
+      totalDistance = cumDist;
+
+      // 勾配ヒートマップライン描画
+      renderGradientRoute(routePoints);
+
+      // 交差点（ターンポイント）抽出
+      extractTurnPoints();
+
+      // 標高グラフ描画
+      drawElevationProfile(0);
+
+      document.getElementById('hud-distance').textContent = "ルート読込完了";
+      document.getElementById('hud-action').textContent = `距離: ${(totalDistance/1000).toFixed(1)}km - 「ナビ開始」を押してください`;
+    }
+
+    // --- 勾配ヒートマップ描画（スムージング処理付き） ---
+    function renderGradientRoute(points) {
+      gradientLayerGroup.clearLayers();
+      if (points.length < 2) return;
+
+      const smoothWindow = 5;
+      const segments = [];
+      let currentSegment = { color: null, latlngs: [] };
+
+      for (let i = 0; i < points.length - 1; i++) {
+        const p1 = points[i];
+        const p2 = points[i + 1];
+
+        const startIdx = Math.max(0, i - smoothWindow);
+        const endIdx = Math.min(points.length - 1, i + smoothWindow + 1);
+        const runDist = points[endIdx].distFromStart - points[startIdx].distFromStart;
+        const riseEle = points[endIdx].ele - points[startIdx].ele;
+        const grade = runDist > 10 ? (riseEle / runDist) * 100 : 0;
+        const color = getGradeColor(grade);
+
+        if (currentSegment.color !== color) {
+          if (currentSegment.latlngs.length > 0) segments.push(currentSegment);
+          currentSegment = { color: color, latlngs: [[p1.lat, p1.lng], [p2.lat, p2.lng]] };
+        } else {
+          currentSegment.latlngs.push([p2.lat, p2.lng]);
+        }
+      }
+      if (currentSegment.latlngs.length > 0) segments.push(currentSegment);
+
+      segments.forEach(seg => {
+        // 下敷き（黒アウトライン）
+        L.polyline(seg.latlngs, {
+          color: '#1c1c1e',
+          weight: 8,
+          opacity: 0.6,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(gradientLayerGroup);
+
+        // 勾配カラーライン
+        L.polyline(seg.latlngs, {
+          color: seg.color,
+          weight: 5,
+          opacity: 0.95,
+          lineCap: 'round',
+          lineJoin: 'round'
+        }).addTo(gradientLayerGroup);
+      });
+
+      const allCoords = points.map(p => [p.lat, p.lng]);
+      map.fitBounds(L.latLngBounds(allCoords), { padding: [50, 50] });
+    }
+
+    // --- ターンポイント抽出 ---
+    function extractTurnPoints() {
+      turnPoints = [];
+      const step = 6;
+      for (let i = step; i < routePoints.length - step; i += step) {
+        const b1 = calculateBearing(routePoints[i - step], routePoints[i]);
+        const b2 = calculateBearing(routePoints[i], routePoints[i + step]);
+        let diff = (b2 - b1 + 360) % 360;
+        if (diff > 180) diff -= 360;
+
+        let action = null;
+        let icon = null;
+
+        if (diff >= 45 && diff <= 135) { action = '右方向です'; icon = '➡️'; }
+        else if (diff <= -45 && diff >= -135) { action = '左方向です'; icon = '⬅️'; }
+        else if (diff > 135 || diff < -135) { action = '折り返し（Uターン）です'; icon = '🔄'; }
+        else if (diff > 25 && diff < 45) { action = '斜め右方向です'; icon = '↗️'; }
+        else if (diff < -25 && diff > -45) { action = '斜め左方向です'; icon = '↖️'; }
+
+        if (action) {
+          turnPoints.push({
+            point: routePoints[i],
+            action,
+            icon,
+            notified150: false,
+            notified30: false
+          });
+        }
+      }
+    }
+
+    // --- 標高プロファイルCanvas描画（勾配色連動） ---
+    function drawElevationProfile(currentProgressDist) {
+      const canvas = document.getElementById('elevationCanvas');
+      const ctx = canvas.getContext('2d');
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = canvas.parentElement.clientWidth * dpr;
+      canvas.height = canvas.parentElement.clientHeight * dpr;
+      ctx.scale(dpr, dpr);
+
+      const w = canvas.parentElement.clientWidth;
+      const h = canvas.parentElement.clientHeight;
+
+      if (routePoints.length < 2) return;
+
+      const eles = routePoints.map(p => p.ele);
+      const minEle = Math.min(...eles);
+      const maxEle = Math.max(...eles) + 10;
+      const eleRange = maxEle - minEle || 1;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // 勾配に応じたライン描画
+      for (let i = 0; i < routePoints.length - 1; i++) {
+        const p1 = routePoints[i];
+        const p2 = routePoints[i + 1];
+        const x1 = (p1.distFromStart / totalDistance) * w;
+        const x2 = (p2.distFromStart / totalDistance) * w;
+        const y1 = h - ((p1.ele - minEle) / eleRange) * (h - 10) - 5;
+        const y2 = h - ((p2.ele - minEle) / eleRange) * (h - 10) - 5;
+
+        const runDist = p2.distFromStart - p1.distFromStart;
+        const grade = runDist > 5 ? ((p2.ele - p1.ele) / runDist) * 100 : 0;
+
+        ctx.beginPath();
+        ctx.moveTo(x1, y1);
+        ctx.lineTo(x2, y2);
+        ctx.strokeStyle = getGradeColor(grade);
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
+      // 現在位置インジケーター
+      if (currentProgressDist > 0) {
+        const curX = (currentProgressDist / totalDistance) * w;
+        ctx.fillStyle = '#ff3b30';
+        ctx.fillRect(curX - 1.5, 0, 3, h);
+      }
+    }
+
+    // --- ナビゲーションの開始 / 停止 ---
+    const startBtn = document.getElementById('startBtn');
+    startBtn.addEventListener('click', async () => {
+      if (isNavigating) {
+        isNavigating = false;
+        startBtn.textContent = 'ナビ開始';
+        startBtn.classList.remove('running');
+        if (watchId) navigator.geolocation.clearWatch(watchId);
+        if (wakeLock) { wakeLock.release(); wakeLock = null; }
+        if (silentAudio) silentAudio.pause();
+        return;
+      }
+
+      if (routePoints.length === 0) {
+        alert('GPXファイルを読み込んでください');
+        return;
+      }
+
+      isNavigating = true;
+      startBtn.textContent = 'ナビ終了';
+      startBtn.classList.add('running');
+
+      // 1. スリープ防止
+      if ('wakeLock' in navigator) {
+        try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e){}
+      }
+
+      // 2. iOSバックグラウンドオーディオ起動
+      activateBackgroundAudio();
+
+      speak("ナビゲーションを開始します。安全運転を心がけてください。");
+
+      // 3. GPS追跡開始
+      watchId = navigator.geolocation.watchPosition(handleLocationUpdate, (err) => {
+        console.warn('GPS Error:', err);
+      }, {
+        enableHighAccuracy: true,
+        maximumAge: 1000,
+        timeout: 10000
+      });
+    });
+
+    // --- リアルタイム位置更新処理 ---
+    let isOffCourse = false;
+    function handleLocationUpdate(pos) {
+      const cur = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        speed: pos.coords.speed || 0
+      };
+
+      if (!userMarker) {
+        userMarker = L.circleMarker([cur.lat, cur.lng], {
+          radius: 9,
+          fillColor: '#0a84ff',
+          color: '#ffffff',
+          weight: 3,
+          fillOpacity: 1
+        }).addTo(map);
+      } else {
+        userMarker.setLatLng([cur.lat, cur.lng]);
+      }
+      map.panTo([cur.lat, cur.lng], { animate: true });
+
+      // 速度更新
+      const kmh = Math.max(0, cur.speed * 3.6);
+      document.getElementById('val-speed').textContent = kmh.toFixed(1);
+
+      // 最寄りルート点の探索
+      let minDist = Infinity;
+      let closestIdx = 0;
+      for (let i = 0; i < routePoints.length; i++) {
+        const d = getDistance(cur, routePoints[i]);
+        if (d < minDist) {
+          minDist = d;
+          closestIdx = i;
+        }
+      }
+
+      const closestPoint = routePoints[closestIdx];
+      document.getElementById('val-ele').textContent = Math.round(closestPoint.ele);
+
+      // 現在地の勾配（前方100mとの比較）
+      const aheadIdx = Math.min(routePoints.length - 1, closestIdx + 10);
+      const runDist = routePoints[aheadIdx].distFromStart - closestPoint.distFromStart;
+      const riseEle = routePoints[aheadIdx].ele - closestPoint.ele;
+      const grade = runDist > 10 ? (riseEle / runDist) * 100 : 0;
+      document.getElementById('val-grade').textContent = grade.toFixed(1);
+
+      // 残り距離
+      const remain = Math.max(0, (totalDistance - closestPoint.distFromStart) / 1000);
+      document.getElementById('val-remain').textContent = remain.toFixed(1);
+
+      // 標高グラフの進捗更新
+      drawElevationProfile(closestPoint.distFromStart);
+
+      // オフコース判定（40m以上乖離）
+      const badge = document.getElementById('off-course-badge');
+      if (minDist > 40) {
+        badge.style.display = 'block';
+        if (!isOffCourse) {
+          speak("コースを外れました。ルートを確認してください。");
+          isOffCourse = true;
+        }
+      } else {
+        badge.style.display = 'none';
+        isOffCourse = false;
+      }
+
+      // 音声案内判定
+      checkTurnGuidance(cur, closestPoint.distFromStart);
+    }
+
+    // --- 次のターンポイントの音声判定 ---
+    function checkTurnGuidance(cur, currentDistFromStart) {
+      const nextTurn = turnPoints.find(t => t.point.distFromStart > currentDistFromStart - 20);
+
+      if (!nextTurn) {
+        document.getElementById('hud-icon').textContent = '🏁';
+        document.getElementById('hud-distance').textContent = 'まもなく';
+        document.getElementById('hud-action').textContent = '目的地に到着します';
+        return;
+      }
+
+      const distToTurn = getDistance(cur, nextTurn.point);
+      document.getElementById('hud-icon').textContent = nextTurn.icon;
+      document.getElementById('hud-distance').textContent = distToTurn > 1000 ?
+        `${(distToTurn/1000).toFixed(1)} km` : `${Math.round(distToTurn)} m`;
+      document.getElementById('hud-action').textContent = nextTurn.action;
+
+      if (distToTurn <= 160 && distToTurn > 50 && !nextTurn.notified150) {
+        speak(`およそ150メートル先、${nextTurn.action}`);
+        nextTurn.notified150 = true;
+      } else if (distToTurn <= 35 && distToTurn > 5 && !nextTurn.notified30) {
+        speak(`まもなく、${nextTurn.action}`);
+        nextTurn.notified30 = true;
+      }
+    }
+
+    // 再センタリング
+    document.getElementById('recenterBtn').addEventListener('click', () => {
+      if (userMarker) map.setView(userMarker.getLatLng(), 16);
+    });
+
+    // 画面復帰時の再同期
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && userMarker) {
+        map.panTo(userMarker.getLatLng());
+      }
+    });
+
+    // --- Service Worker 登録 ---
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then((reg) => console.log('SW registered:', reg.scope))
+          .catch((err) => console.error('SW registration failed:', err));
+      });
+    }
+  </script>
+</body>
+</html>

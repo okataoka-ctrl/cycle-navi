@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>PWA Icon Generator</title>
+  <style>
+    body { background: #121212; color: #fff; font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    button { background: #30d158; color: #000; font-size: 18px; font-weight: bold; border: none; padding: 14px 28px; border-radius: 12px; cursor: pointer; margin: 10px; }
+    canvas { display: none; }
+  </style>
+</head>
+<body>
+  <h2>CycleNavi PWA アイコン自動生成</h2>
+  <button id="genBtn">icon-192.png と icon-512.png を一括ダウンロード</button>
+  <canvas id="cvs"></canvas>
+
+  <script>
+    function drawIcon(size) {
+      const cvs = document.getElementById('cvs');
+      cvs.width = size;
+      cvs.height = size;
+      const ctx = cvs.getContext('2d');
+
+      // 背景
+      ctx.fillStyle = '#1c1c1e';
+      ctx.fillRect(0, 0, size, size);
+
+      // 外枠のアクセントグロー
+      ctx.strokeStyle = '#30d158';
+      ctx.lineWidth = size * 0.03;
+      ctx.strokeRect(size * 0.04, size * 0.04, size * 0.92, size * 0.92);
+
+      // 中央のナビ矢印 & 自転車シンボル
+      ctx.fillStyle = '#30d158';
+      ctx.beginPath();
+      // ナビゲーション三角形
+      ctx.moveTo(size * 0.5, size * 0.22);
+      ctx.lineTo(size * 0.78, size * 0.75);
+      ctx.lineTo(size * 0.5, size * 0.62);
+      ctx.lineTo(size * 0.22, size * 0.75);
+      ctx.closePath();
+      ctx.fill();
+
+      // 中央シアンコア
+      ctx.fillStyle = '#0a84ff';
+      ctx.beginPath();
+      ctx.arc(size * 0.5, size * 0.48, size * 0.08, 0, Math.PI * 2);
+      ctx.fill();
+
+      return cvs.toDataURL('image/png');
+    }
+
+    function download(dataUrl, filename) {
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+    document.getElementById('genBtn').addEventListener('click', () => {
+      download(drawIcon(192), 'icon-192.png');
+      setTimeout(() => download(drawIcon(512), 'icon-512.png'), 300);
+    });
+  </script>
+</body>
+</html>
